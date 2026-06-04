@@ -1,0 +1,39 @@
+{# Minimal, self-contained onboarding picker. The host app can override this at
+   templates/craft-moneybird/_picker.twig to use its own layout/Bootstrap. #}
+<!doctype html>
+<html lang="{{ craft.app.language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ 'Moneybird'|t('craft-moneybird') }}</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1rem; }
+        fieldset { border: 0; padding: 0; margin: 0 0 1.5rem; }
+        label { display: block; padding: .6rem .8rem; border: 1px solid #ccc; border-radius: .4rem; margin-bottom: .5rem; cursor: pointer; }
+        button { padding: .6rem 1.2rem; border: 0; border-radius: .4rem; background: #0d6efd; color: #fff; font-size: 1rem; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>
+        {% if type == 'user' %}
+            {{ 'Who are you?'|t('craft-moneybird') }}
+        {% else %}
+            {{ 'Choose your administration'|t('craft-moneybird') }}
+        {% endif %}
+    </h1>
+
+    <form method="post" action="{{ actionUrl('craft-moneybird/auth/select') }}">
+        {{ csrfInput() }}
+        <input type="hidden" name="type" value="{{ type }}">
+        <fieldset>
+            {% for option in options %}
+                <label>
+                    <input type="radio" name="selection" value="{{ option.id }}"{{ loop.first ? ' checked' }} required>
+                    {{ option.label }}
+                </label>
+            {% endfor %}
+        </fieldset>
+        <button type="submit">{{ 'Continue'|t('craft-moneybird') }}</button>
+    </form>
+</body>
+</html>

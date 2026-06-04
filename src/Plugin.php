@@ -7,7 +7,14 @@ namespace larsmarkusstudio\moneybird;
 use Craft;
 use craft\base\Model;
 use craft\base\Plugin as BasePlugin;
+use craft\events\RegisterTemplateRootsEvent;
+use craft\web\View;
 use larsmarkusstudio\moneybird\models\Settings;
+use larsmarkusstudio\moneybird\services\ApiClient;
+use larsmarkusstudio\moneybird\services\AuthService;
+use larsmarkusstudio\moneybird\services\ContactsService;
+use larsmarkusstudio\moneybird\services\DocumentsService;
+use yii\base\Event;
 
 /**
  * Moneybird plugin.
@@ -19,6 +26,10 @@ use larsmarkusstudio\moneybird\models\Settings;
  * @license MIT
  *
  * @property-read Settings $settings
+ * @property-read AuthService $auth
+ * @property-read ApiClient $api
+ * @property-read ContactsService $contacts
+ * @property-read DocumentsService $documents
  */
 class Plugin extends BasePlugin
 {
@@ -26,14 +37,15 @@ class Plugin extends BasePlugin
 
     public bool $hasCpSettings = true;
 
-    /**
-     * Service components are registered here. Implementations land in Phase 1
-     * (MoneybirdAuthService, MoneybirdContactsService, MoneybirdDocumentsService).
-     */
     public static function config(): array
     {
         return [
-            'components' => [],
+            'components' => [
+                'auth' => AuthService::class,
+                'api' => ApiClient::class,
+                'contacts' => ContactsService::class,
+                'documents' => DocumentsService::class,
+            ],
         ];
     }
 
@@ -43,7 +55,15 @@ class Plugin extends BasePlugin
 
         Craft::setAlias('@craft-moneybird', __DIR__);
 
-        // OAuth URL rules, callback handling and event wiring are added in Phase 1.
+        // Make plugin templates (e.g. the onboarding picker) resolvable on the
+        // front end. The host app can override them under templates/craft-moneybird/.
+        Event::on(
+            View::class,
+            View::EVENT_REGISTER_SITE_TEMPLATE_ROOTS,
+            function (RegisterTemplateRootsEvent $event) {
+                $event->roots['craft-moneybird'] = __DIR__ . '/templates';
+            },
+        );
     }
 
     protected function createSettingsModel(): ?Model

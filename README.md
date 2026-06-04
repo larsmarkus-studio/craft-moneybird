@@ -4,9 +4,6 @@ A Craft CMS 5 plugin providing [Moneybird](https://www.moneybird.com) OAuth
 authentication and API service classes. Designed as a general foundation — other
 developers can build different Moneybird integrations on top of it.
 
-It is the open-source base layer for [Tripsheet](https://tripsheet.nl), but has
-no dependency on it.
-
 ## Requirements
 
 - Craft CMS 5.6.0 or later (Pro edition, for user accounts)
