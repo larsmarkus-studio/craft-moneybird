@@ -1,0 +1,36 @@
+{% import "_includes/forms" as forms %}
+
+{{ forms.autosuggestField({
+    label: "Client ID"|t('craft-moneybird'),
+    instructions: "Moneybird OAuth application client ID."|t('craft-moneybird'),
+    id: 'clientId',
+    name: 'clientId',
+    value: settings.clientId,
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    label: "Client secret"|t('craft-moneybird'),
+    instructions: "Moneybird OAuth application client secret."|t('craft-moneybird'),
+    id: 'clientSecret',
+    name: 'clientSecret',
+    value: settings.clientSecret,
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.autosuggestField({
+    label: "Redirect URI"|t('craft-moneybird'),
+    instructions: "Must match the redirect URI registered with Moneybird."|t('craft-moneybird'),
+    id: 'redirectUri',
+    name: 'redirectUri',
+    value: settings.redirectUri,
+    suggestEnvVars: true,
+}) }}
+
+{{ forms.textField({
+    label: "Kilometre ledger account ID"|t('craft-moneybird'),
+    instructions: "Moneybird ledger account used for kilometre receipts."|t('craft-moneybird'),
+    id: 'kilometerLedgerAccountId',
+    name: 'kilometerLedgerAccountId',
+    value: settings.kilometerLedgerAccountId,
+}) }}
