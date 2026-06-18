@@ -72,7 +72,7 @@ class DocumentsService extends Component
         }
 
         $url = AuthService::API_BASE . $administrationId
-            . "/documents/receipts/{$receiptId}/attachment.json";
+            . "/documents/receipts/{$receiptId}/attachments.json";
 
         $response = Craft::createGuzzleClient()->post($url, [
             'headers' => [
