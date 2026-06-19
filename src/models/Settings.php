@@ -31,12 +31,6 @@ class Settings extends Model
      */
     public string $redirectUri = '';
 
-    /**
-     * Moneybird ledger account ID used for kilometre receipts.
-     * Configured once in the CP by the site owner.
-     */
-    public string $kilometerLedgerAccountId = '';
-
     public function behaviors(): array
     {
         return [
@@ -50,7 +44,7 @@ class Settings extends Model
     public function rules(): array
     {
         return [
-            [['clientId', 'clientSecret', 'redirectUri', 'kilometerLedgerAccountId'], 'string'],
+            [['clientId', 'clientSecret', 'redirectUri'], 'string'],
             [['clientId', 'clientSecret', 'redirectUri'], 'trim'],
         ];
     }

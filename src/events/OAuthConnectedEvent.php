@@ -22,4 +22,9 @@ class OAuthConnectedEvent extends Event
      * Whether the Craft user was created during this flow (vs. matched).
      */
     public bool $isNewUser = false;
+
+    /**
+     * Where to redirect after the flow completes. Defaults to site root if null.
+     */
+    public ?string $redirectUrl = null;
 }

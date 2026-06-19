@@ -32,6 +32,11 @@ class AuthController extends Controller
      */
     public function actionConnect(): Response
     {
+        $site = Craft::$app->getRequest()->getQueryParam('site');
+        if ($site) {
+            Craft::$app->getSession()->set('moneybird.connectSite', $site);
+        }
+
         return $this->redirect(Plugin::getInstance()->auth->getAuthorizationUrl());
     }
 
@@ -210,7 +215,7 @@ class AuthController extends Controller
         $event->isNewUser = $isNewUser;
         $this->trigger(self::EVENT_OAUTH_CONNECTED, $event);
 
-        return $this->redirect(UrlHelper::siteUrl());
+        return $this->redirect($event->redirectUrl ?? UrlHelper::siteUrl());
     }
 
     private function createUser(?string $name, string $email): ?User
