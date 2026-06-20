@@ -32,9 +32,9 @@ class AuthController extends Controller
      */
     public function actionConnect(): Response
     {
-        $site = Craft::$app->getRequest()->getQueryParam('site');
-        if ($site) {
-            Craft::$app->getSession()->set('moneybird.connectSite', $site);
+        $redirect = Craft::$app->getRequest()->getQueryParam('redirect');
+        if ($redirect) {
+            Craft::$app->getSession()->set('moneybird.connectRedirect', $redirect);
         }
 
         return $this->redirect(Plugin::getInstance()->auth->getAuthorizationUrl());
@@ -201,9 +201,12 @@ class AuthController extends Controller
         ]);
         $auth->saveTokens((int)$user->id, $moneybirdUserId, $administrationId, $token);
 
+        $redirectUrl = $session->get('moneybird.connectRedirect');
+
         $session->remove(self::PENDING_SESSION_KEY);
         $session->remove('moneybird.pending.administration');
         $session->remove('moneybird.pending.user');
+        $session->remove('moneybird.connectRedirect');
 
         Craft::$app->getUser()->login($user);
 
@@ -213,6 +216,7 @@ class AuthController extends Controller
         $event->administrationId = $administrationId;
         $event->identity = $identity;
         $event->isNewUser = $isNewUser;
+        $event->redirectUrl = $redirectUrl;
         $this->trigger(self::EVENT_OAUTH_CONNECTED, $event);
 
         return $this->redirect($event->redirectUrl ?? UrlHelper::siteUrl());
