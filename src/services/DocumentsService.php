@@ -14,9 +14,8 @@ use larsmarkusstudio\moneybird\Plugin;
 /**
  * Create Moneybird receipts (documents) and attach PDFs.
  *
- * NOTE: the exact receipt/attachment endpoint shapes should be confirmed against
- * a live administration in Phase 5; they follow the documented `documents/receipts`
- * structure here.
+ * Receipts are created via `documents/receipts`; attachments are uploaded as
+ * multipart to the receipt's `attachments` endpoint.
  */
 class DocumentsService extends Component
 {

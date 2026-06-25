@@ -1,0 +1,19 @@
+{# Shown when a Moneybird step fails transiently (network error, token exchange).
+   The host app can override this at templates/craft-moneybird/_retry.twig. #}
+<!doctype html>
+<html lang="{{ craft.app.language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ 'Moneybird'|t('craft-moneybird') }}</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1rem; }
+        a.button { display: inline-block; padding: .6rem 1.2rem; border-radius: .4rem; background: #0d6efd; color: #fff; text-decoration: none; font-size: 1rem; }
+    </style>
+</head>
+<body>
+    <h1>{{ 'Something went wrong'|t('craft-moneybird') }}</h1>
+    <p>{{ "We couldn't complete the connection to Moneybird. This is usually temporary — please try again."|t('craft-moneybird') }}</p>
+    <p><a class="button" href="{{ retryUrl }}">{{ 'Try again'|t('craft-moneybird') }}</a></p>
+</body>
+</html>

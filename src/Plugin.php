@@ -60,7 +60,7 @@ class Plugin extends BasePlugin
         Event::on(
             View::class,
             View::EVENT_REGISTER_SITE_TEMPLATE_ROOTS,
-            function (RegisterTemplateRootsEvent $event) {
+            function(RegisterTemplateRootsEvent $event) {
                 $event->roots['craft-moneybird'] = __DIR__ . '/templates';
             },
         );
