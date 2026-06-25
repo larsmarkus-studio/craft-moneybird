@@ -12,6 +12,7 @@ use craft\helpers\Json;
 use larsmarkusstudio\moneybird\models\Administration;
 use larsmarkusstudio\moneybird\models\Identity;
 use larsmarkusstudio\moneybird\models\MoneybirdUser;
+use larsmarkusstudio\moneybird\models\Settings;
 use larsmarkusstudio\moneybird\Plugin;
 use larsmarkusstudio\moneybird\records\TokenRecord;
 use League\OAuth2\Client\Provider\GenericProvider;
@@ -40,6 +41,7 @@ class AuthService extends Component
     public function getProvider(): GenericProvider
     {
         if ($this->provider === null) {
+            /** @var Settings $settings */
             $settings = Plugin::getInstance()->getSettings();
             $this->provider = new GenericProvider([
                 'clientId' => App::parseEnv($settings->clientId),
@@ -154,6 +156,12 @@ class AuthService extends Component
         string $administrationId,
         AccessTokenInterface $token,
     ): void {
+        // ponytail: single administration per user — getRecord/getAdministrationId/
+        // getValidAccessToken all key on userId alone and this overwrites the one
+        // row. For one-user-many-administrations, key TokenRecord on
+        // (userId, administrationId), thread administrationId through those methods
+        // + callers, and change this ?? new to find-by-(userId,administrationId).
+        // Login-then-connect (AuthController::finalize) is already the seam for it.
         $record = $this->getRecord($userId) ?? new TokenRecord(['userId' => $userId]);
 
         $record->moneybirdUserId = $moneybirdUserId;
@@ -166,7 +174,17 @@ class AuthService extends Component
         }
 
         $record->tokenExpiresAt = $token->getExpires();
-        $record->save();
+
+        // Don't swallow a failed write: a silently-unsaved token means the next
+        // login can't find the link and re-runs account creation.
+        if (!$record->save()) {
+            Craft::error(
+                'Failed to save Moneybird tokens for user ' . $userId . ': '
+                . implode(', ', $record->getFirstErrors()),
+                __METHOD__,
+            );
+            throw new \RuntimeException('Could not persist Moneybird tokens.');
+        }
     }
 
     /**

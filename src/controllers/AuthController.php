@@ -8,12 +8,13 @@ use Craft;
 use craft\elements\User;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
-use craft\web\Response;
+use GuzzleHttp\Exception\GuzzleException;
 use larsmarkusstudio\moneybird\events\OAuthConnectedEvent;
 use larsmarkusstudio\moneybird\models\Identity;
 use larsmarkusstudio\moneybird\Plugin;
 use League\OAuth2\Client\Token\AccessToken;
 use yii\web\BadRequestHttpException;
+use yii\web\Response;
 
 /**
  * Drives the Moneybird OAuth flow: connect → callback → (optional pickers) →
@@ -32,8 +33,14 @@ class AuthController extends Controller
      */
     public function actionConnect(): Response
     {
-        $redirect = Craft::$app->getRequest()->getQueryParam('redirect');
-        if ($redirect) {
+        // Drop anything left over from an abandoned attempt before starting fresh.
+        $this->clearPending();
+
+        // Only accept site-relative paths, never absolute URLs — otherwise a
+        // crafted ?redirect= would turn the post-login redirect into an open
+        // redirect (e.g. ?redirect=https://evil.com).
+        $redirect = (string)Craft::$app->getRequest()->getQueryParam('redirect');
+        if ($redirect !== '' && str_starts_with($redirect, '/') && !str_starts_with($redirect, '//')) {
             Craft::$app->getSession()->set('moneybird.connectRedirect', $redirect);
         }
 
@@ -61,7 +68,13 @@ class AuthController extends Controller
         $auth->clearStoredState();
 
         $code = (string)$request->getRequiredQueryParam('code');
-        $token = $auth->requestAccessToken($code);
+
+        try {
+            $token = $auth->requestAccessToken($code);
+        } catch (\Throwable $e) {
+            Craft::error('Moneybird token exchange failed: ' . $e->getMessage(), __METHOD__);
+            return $this->renderRetry();
+        }
 
         Craft::$app->getSession()->set(self::PENDING_SESSION_KEY, [
             'access_token' => $token->getToken(),
@@ -69,7 +82,7 @@ class AuthController extends Controller
             'expires' => $token->getExpires(),
         ]);
 
-        return $this->resolve();
+        return $this->resolveOrRetry();
     }
 
     /**
@@ -79,9 +92,14 @@ class AuthController extends Controller
     {
         $this->requirePostRequest();
 
-        $type = $this->request->getRequiredBodyParam('type');
+        $type = (string)$this->request->getRequiredBodyParam('type');
         $selection = (string)$this->request->getRequiredBodyParam('selection');
         $session = Craft::$app->getSession();
+
+        // Only the two picker steps may write into the pending namespace.
+        if (!in_array($type, ['administration', 'user'], true)) {
+            throw new BadRequestHttpException('Invalid selection type.');
+        }
 
         if (!$session->get(self::PENDING_SESSION_KEY)) {
             throw new BadRequestHttpException('No pending Moneybird connection.');
@@ -89,7 +107,22 @@ class AuthController extends Controller
 
         $session->set("moneybird.pending.{$type}", $selection);
 
-        return $this->resolve();
+        return $this->resolveOrRetry();
+    }
+
+    /**
+     * Run identity resolution, falling back to a retry page if a Moneybird API
+     * call fails transiently (network error, 5xx). Genuine 4xx logic errors
+     * (no administrations, etc.) still surface as such.
+     */
+    private function resolveOrRetry(): Response
+    {
+        try {
+            return $this->resolve();
+        } catch (GuzzleException $e) {
+            Craft::error('Moneybird connection failed: ' . $e->getMessage(), __METHOD__);
+            return $this->renderRetry();
+        }
     }
 
     /**
@@ -102,7 +135,7 @@ class AuthController extends Controller
 
         Plugin::getInstance()->auth->disconnect((int)Craft::$app->getUser()->getId());
 
-        return $this->redirectToPostedUrl() ?? $this->redirect(UrlHelper::siteUrl());
+        return $this->redirectToPostedUrl(null, UrlHelper::siteUrl());
     }
 
     /**
@@ -174,18 +207,45 @@ class AuthController extends Controller
         $effectiveEmail = $email ?: $identity?->email ?: "moneybird-{$moneybirdUserId}@moneybird.invalid";
         $isNewUser = false;
 
-        // 1) Already linked via a stored token.
+        // Link strictly by Moneybird user ID — never by email. Matching on an
+        // (unverified, partly free-form) Moneybird email would let a crafted
+        // account take over an existing Craft user.
         $existingUserId = $auth->findUserIdByMoneybirdUserId($moneybirdUserId);
         $user = $existingUserId !== null
             ? Craft::$app->getUsers()->getUserById($existingUserId)
             : null;
 
-        // 2) Otherwise match an existing Craft user by email (keeps the flow
-        //    idempotent if a prior attempt created the user but not the token).
-        $user ??= Craft::$app->getUsers()->getUserByUsernameOrEmail($effectiveEmail);
+        // Login-then-connect: an already signed-in user is linking a Moneybird
+        // account to their existing Craft user. The Craft session proves the
+        // human, the OAuth handshake proves Moneybird ownership — so we attach
+        // to the current user rather than minting a duplicate. Still no email
+        // matching (Moneybird emails are unverified); identity comes from the
+        // live session.
+        if ($user === null && !Craft::$app->getUser()->getIsGuest()) {
+            $user = Craft::$app->getUser()->getIdentity();
+        }
 
-        // 3) Otherwise create one.
+        // First-time connection: create a Craft user. The completed Moneybird
+        // OAuth handshake is the gate here, so this works regardless of Craft's
+        // global allowPublicRegistration setting (which only guards the
+        // built-in front-end signup form, not programmatic creation).
         if ($user === null) {
+            // Refuse up front if the email is already taken (incl. trashed users —
+            // Craft's uniqueness check counts them). Otherwise createUser() saves
+            // the element, then activateUser() throws on the duplicate, leaking a
+            // half-created user on every retry. An existing account must link via
+            // login-then-connect, not by minting a duplicate.
+            $emailTaken = User::find()
+                ->email($effectiveEmail)
+                ->status(null)   // any status: suspended/pending/inactive included
+                ->trashed(null)  // and trashed — Craft's uniqueness counts them too
+                ->exists();
+            if ($emailTaken) {
+                throw new BadRequestHttpException(
+                    "A Craft account already exists for {$effectiveEmail}. Log in to that account first, then connect Moneybird to link it."
+                );
+            }
+
             $user = $this->createUser($name, $effectiveEmail);
             $isNewUser = true;
         }
@@ -202,11 +262,7 @@ class AuthController extends Controller
         $auth->saveTokens((int)$user->id, $moneybirdUserId, $administrationId, $token);
 
         $redirectUrl = $session->get('moneybird.connectRedirect');
-
-        $session->remove(self::PENDING_SESSION_KEY);
-        $session->remove('moneybird.pending.administration');
-        $session->remove('moneybird.pending.user');
-        $session->remove('moneybird.connectRedirect');
+        $this->clearPending();
 
         Craft::$app->getUser()->login($user);
 
@@ -245,6 +301,34 @@ class AuthController extends Controller
         return $this->renderTemplate('craft-moneybird/_picker', [
             'type' => $type,
             'options' => $options,
+        ]);
+    }
+
+    /**
+     * Wipe all transient OAuth-flow state from the session.
+     */
+    private function clearPending(): void
+    {
+        $session = Craft::$app->getSession();
+        $session->remove(self::PENDING_SESSION_KEY);
+        $session->remove('moneybird.pending.administration');
+        $session->remove('moneybird.pending.user');
+        $session->remove('moneybird.connectRedirect');
+    }
+
+    /**
+     * Show a "try again" page after a transient failure. Re-links to connect,
+     * preserving the original ?redirect= target if one was set.
+     */
+    private function renderRetry(): Response
+    {
+        $redirect = Craft::$app->getSession()->get('moneybird.connectRedirect');
+
+        return $this->renderTemplate('craft-moneybird/_retry', [
+            'retryUrl' => UrlHelper::actionUrl(
+                'craft-moneybird/auth/connect',
+                $redirect ? ['redirect' => $redirect] : [],
+            ),
         ]);
     }
 }
