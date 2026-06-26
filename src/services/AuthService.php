@@ -156,12 +156,13 @@ class AuthService extends Component
         string $administrationId,
         AccessTokenInterface $token,
     ): void {
-        // ponytail: single administration per user — getRecord/getAdministrationId/
-        // getValidAccessToken all key on userId alone and this overwrites the one
-        // row. For one-user-many-administrations, key TokenRecord on
-        // (userId, administrationId), thread administrationId through those methods
-        // + callers, and change this ?? new to find-by-(userId,administrationId).
-        // Login-then-connect (AuthController::finalize) is already the seam for it.
+        // ponytail: single administration per user. The Moneybird OAuth grant is
+        // account-scoped (one token reaches ALL administrations via /{adminId}/...),
+        // so multi-admin is NOT one-token-per-admin. Split into: credentials
+        // (userId, moneybirdUserId, tokens) — one per user — and an adminLink table
+        // (userId, administrationId) — one row per activated administration, all
+        // sharing the one token. Today we just store the single picked administrationId
+        // on this row. Login-then-connect (AuthController::finalize) is the seam.
         $record = $this->getRecord($userId) ?? new TokenRecord(['userId' => $userId]);
 
         $record->moneybirdUserId = $moneybirdUserId;
