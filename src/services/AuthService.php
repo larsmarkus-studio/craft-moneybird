@@ -133,9 +133,43 @@ class AuthService extends Component
         return $userId !== null && $this->getRecord($userId) !== null;
     }
 
+    /**
+     * The user's active administration token, falling back to any of theirs
+     * (covers rows predating the isActive flag).
+     */
     public function getRecord(int $userId): ?TokenRecord
     {
-        return TokenRecord::findOne(['userId' => $userId]);
+        return TokenRecord::findOne(['userId' => $userId, 'isActive' => true])
+            ?? TokenRecord::findOne(['userId' => $userId]);
+    }
+
+    /** All administrations the user has connected, active one first. */
+    public function getConnectedAdministrations(int $userId): array
+    {
+        $records = TokenRecord::find()
+            ->where(['userId' => $userId])
+            ->orderBy(['isActive' => SORT_DESC, 'administrationName' => SORT_ASC])
+            ->all();
+
+        return array_map(static fn(TokenRecord $r) => [
+            'id' => $r->administrationId,
+            'name' => $r->administrationName ?: $r->administrationId,
+            'active' => (bool)$r->isActive,
+        ], $records);
+    }
+
+    /** Make a connected administration the active one. False if not connected. */
+    public function setActiveAdministration(int $userId, string $administrationId): bool
+    {
+        $target = TokenRecord::findOne(['userId' => $userId, 'administrationId' => $administrationId]);
+        if ($target === null) {
+            return false;
+        }
+
+        TokenRecord::updateAll(['isActive' => false], ['userId' => $userId]);
+        $target->isActive = true;
+
+        return $target->save();
     }
 
     public function findUserIdByMoneybirdUserId(string $moneybirdUserId): ?int
@@ -155,18 +189,21 @@ class AuthService extends Component
         string $moneybirdUserId,
         string $administrationId,
         AccessTokenInterface $token,
+        ?string $administrationName = null,
     ): void {
-        // ponytail: single administration per user. The Moneybird OAuth grant is
-        // account-scoped (one token reaches ALL administrations via /{adminId}/...),
-        // so multi-admin is NOT one-token-per-admin. Split into: credentials
-        // (userId, moneybirdUserId, tokens) — one per user — and an adminLink table
-        // (userId, administrationId) — one row per activated administration, all
-        // sharing the one token. Today we just store the single picked administrationId
-        // on this row. Login-then-connect (AuthController::finalize) is the seam.
-        $record = $this->getRecord($userId) ?? new TokenRecord(['userId' => $userId]);
+        // One token row per (userId, administrationId): a Moneybird token is
+        // scoped to the single administration it was granted for, so connecting
+        // another administration adds a row rather than overwriting. The freshly
+        // connected administration becomes active.
+        $record = TokenRecord::findOne(['userId' => $userId, 'administrationId' => $administrationId])
+            ?? new TokenRecord(['userId' => $userId]);
 
         $record->moneybirdUserId = $moneybirdUserId;
         $record->administrationId = $administrationId;
+        if ($administrationName !== null) {
+            $record->administrationName = $administrationName;
+        }
+        $record->isActive = true;
         $record->accessToken = $this->encrypt((string)$token->getToken());
 
         $refreshToken = $token->getRefreshToken();
@@ -186,6 +223,12 @@ class AuthService extends Component
             );
             throw new \RuntimeException('Could not persist Moneybird tokens.');
         }
+
+        // Exactly one active administration per user.
+        TokenRecord::updateAll(
+            ['isActive' => false],
+            ['and', ['userId' => $userId], ['not', ['id' => $record->id]]],
+        );
     }
 
     /**

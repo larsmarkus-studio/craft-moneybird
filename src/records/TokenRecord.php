@@ -16,9 +16,11 @@ use craft\db\ActiveRecord;
  * @property int $userId
  * @property string $moneybirdUserId
  * @property string $administrationId
+ * @property string|null $administrationName
  * @property string $accessToken
  * @property string|null $refreshToken
  * @property int|null $tokenExpiresAt
+ * @property bool $isActive
  */
 class TokenRecord extends ActiveRecord
 {

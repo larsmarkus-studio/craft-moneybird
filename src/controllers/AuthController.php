@@ -190,11 +190,20 @@ class AuthController extends Controller
 
         $identity = $auth->getIdentity($accessToken, $administrationId);
 
-        return $this->finalize($administrationId, $moneybirdUserId, $selectedUser?->name, $selectedUser?->email, $identity);
+        $administrationName = null;
+        foreach ($administrations as $a) {
+            if ($a->id === $administrationId) {
+                $administrationName = $a->name;
+                break;
+            }
+        }
+
+        return $this->finalize($administrationId, $administrationName, $moneybirdUserId, $selectedUser?->name, $selectedUser?->email, $identity);
     }
 
     private function finalize(
         string $administrationId,
+        ?string $administrationName,
         string $moneybirdUserId,
         ?string $name,
         ?string $email,
@@ -259,7 +268,7 @@ class AuthController extends Controller
             'refresh_token' => $pending['refresh_token'],
             'expires' => $pending['expires'],
         ]);
-        $auth->saveTokens((int)$user->id, $moneybirdUserId, $administrationId, $token);
+        $auth->saveTokens((int)$user->id, $moneybirdUserId, $administrationId, $token, $administrationName);
 
         $redirectUrl = $session->get('moneybird.connectRedirect');
         $this->clearPending();
