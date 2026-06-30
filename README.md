@@ -20,6 +20,9 @@ that turns trips into Moneybird receipts.
 - **Onboarding pickers** — when a user has access to more than one
   administration (or more than one Moneybird user), the plugin asks which one to
   use. Single-option cases are resolved automatically.
+- **Multiple administrations per user** — a user can connect more than one
+  administration; each gets its own token, and you switch the active one without
+  re-authorising.
 - **Typed services** — `auth`, `api`, `contacts` and `documents`, returning
   plain models instead of raw arrays.
 - **Events** — hook into `OAuthConnected` and `ReceiptCreated` to extend the
@@ -104,6 +107,24 @@ To disconnect, POST to the disconnect action (requires a logged-in user):
   {{ csrfInput() }}
   <button type="submit">Disconnect Moneybird</button>
 </form>
+```
+
+## Switching administrations
+
+A Moneybird OAuth token is scoped to a single administration. Sending an
+already-connected user back through the connect action with a different
+administration adds a token alongside the existing one (the newly connected one
+becomes active) rather than replacing it. All services act on the **active**
+administration.
+
+```php
+$auth = Plugin::getInstance()->auth;
+
+// [['id' => '123', 'name' => 'Acme BV', 'active' => true], ...] — active first
+$administrations = $auth->getConnectedAdministrations($userId);
+
+// Switch the active administration (false if the user hasn't connected it)
+$auth->setActiveAdministration($userId, '123');
 ```
 
 ## Using the API

@@ -10,3 +10,5 @@
 - `OAuthConnected` and `ReceiptCreated` events.
 - `?redirect=` parameter on the connect action to control the post-flow landing URL.
 - Plugin settings screen for OAuth credentials (referenced from environment variables).
+- Multiple administrations per Craft user: one token row per administration, with
+  `AuthService::getConnectedAdministrations()` / `setActiveAdministration()` to switch the active one.
