@@ -273,7 +273,13 @@ class AuthController extends Controller
         $redirectUrl = $session->get('moneybird.connectRedirect');
         $this->clearPending();
 
-        Craft::$app->getUser()->login($user);
+        // Log in for a real duration, not the request's PHP session: Yii only sends
+        // the auto-login identity cookie when the duration is > 0, so login($user)
+        // alone meant every browser restart or session GC forced a whole new OAuth
+        // round-trip. Same resolution Craft's own SSO service uses.
+        $generalConfig = Craft::$app->getConfig()->getGeneral();
+        $duration = $generalConfig->rememberedUserSessionDuration ?: $generalConfig->userSessionDuration;
+        Craft::$app->getUser()->login($user, $duration);
 
         $event = new OAuthConnectedEvent();
         $event->user = $user;

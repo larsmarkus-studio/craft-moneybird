@@ -1,5 +1,12 @@
 # Release Notes for Moneybird
 
+## 0.2.1
+
+### Fixed
+- The OAuth flow now logs the user in for `rememberedUserSessionDuration` (falling back to
+  `userSessionDuration`) instead of the current PHP session only, so an identity cookie is
+  issued and returning users are no longer sent through Moneybird's login screen every session.
+
 ## Unreleased
 
 ### Added
