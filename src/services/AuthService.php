@@ -166,7 +166,8 @@ class AuthService extends Component
             return false;
         }
 
-        TokenRecord::updateAll(['isActive' => false], ['userId' => $userId]);
+        // Not the target itself: if it was already active, save() sees nothing dirty and wouldn't re-set it.
+        TokenRecord::updateAll(['isActive' => false], ['and', ['userId' => $userId], ['not', ['id' => $target->id]]]);
         $target->isActive = true;
 
         return $target->save();
