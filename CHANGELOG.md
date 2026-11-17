@@ -1,6 +1,6 @@
 # Release Notes for Moneybird
 
-## Unreleased
+## 0.2.2
 
 ### Fixed
 - `AuthService::setActiveAdministration()` no longer leaves the user with no active administration
